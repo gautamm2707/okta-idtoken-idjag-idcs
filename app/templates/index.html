@@ -28,10 +28,10 @@
 <div class="step-heading"><span class="step-number">⚙</span><h2>Inbound ID-JAG Trust</h2><span class="token-badge">IDCS setup</span></div>
 <p class="participants">Local app <span>→</span> IDCS administration API</p>
 <p>Create the trust that allows IDCS to accept ID-JAGs from Okta. The app obtains an admin access token using IDCS client credentials, checks for an existing issuer trust, and creates one if absent.</p>
-<p class="muted">Uses IDCS_CLIENT_ID and IDCS_CLIENT_SECRET. The IDCS application needs Client Credentials enabled and permission to manage Identity Propagation Trusts. Source client: <code>{{ cfg.trust_source_client or 'not configured' }}</code>.</p>
+<p class="muted">Uses IDCS_ADMIN_CLIENT_ID and IDCS_ADMIN_CLIENT_SECRET when configured; otherwise uses IDCS_CLIENT_ID and IDCS_CLIENT_SECRET. The administrative application needs Client Credentials enabled and permission to manage Identity Propagation Trusts. Source client: <code>{{ cfg.trust_source_client or 'not configured' }}</code>.</p>
 {% if trust_preview %}<details><summary>Trust request derived from .env</summary><pre>{{ trust_preview|tojson(indent=2) }}</pre></details>{% endif %}
-<form method="post" action="/setup/trust"><input type="hidden" name="csrf" value="{{ csrf }}"><button {% if missing.idcs %}disabled{% endif %}>Create or check inbound trust</button></form>
-{% if missing.idcs %}<p class="muted">Configure {{ missing.idcs|join(', ') }} in .env, then restart the app.</p>{% endif %}
+<form method="post" action="/setup/trust"><input type="hidden" name="csrf" value="{{ csrf }}"><button {% if not trust_preview or (missing.idcs and not (cfg.get('IDCS_ADMIN_CLIENT_ID') and cfg.get('IDCS_ADMIN_CLIENT_SECRET'))) %}disabled{% endif %}>Create or check inbound trust</button></form>
+{% if missing.idcs and not (cfg.get('IDCS_ADMIN_CLIENT_ID') and cfg.get('IDCS_ADMIN_CLIENT_SECRET')) %}<p class="muted">Configure {{ missing.idcs|join(', ') }} in .env, then restart the app.</p>{% endif %}
 {% if trust_state %}
 {% if trust_state.error %}<p class="error" role="alert">{{ trust_state.error }}</p>{% endif %}
 {% if trust_state.result %}

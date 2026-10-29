@@ -1,10 +1,12 @@
 # Okta OIDC → ID-JAG → Oracle IDCS
 
+**New tenant? Follow the [end-to-end setup guide](docs/end-to-end-setup.md).** It lists every Okta and IDCS value to collect, the single local `.env` file to edit, tenant-side setup, expected responses, and troubleshooting. The sample `.env.example` uses placeholder URLs; replace them with your own.
+
 Local Flask application inspired by [christian-posta/okta-saml-idjag](https://github.com/christian-posta/okta-saml-idjag). Browser sign-in now uses **OIDC Authorization Code + PKCE**, with **Request / Response / Token** tabs matching the requested flow inspector. The earlier SAML integration remains available through its explicit routes.
 
 ```text
 Browser → Okta OIDC → local app :4141
-                         │ ID token + server-side refresh token
+                         │ verified ID token (refresh token optional)
                          ├→ Okta: ID token → ID-JAG (aud = OKTA_XAA_AUDIENCE)
                          ├→ IDCS: JWT bearer grant + ID-JAG → access token
                          └→ IDCS /admin/v1/Users (Bearer access token, paginated)
@@ -46,9 +48,9 @@ The supplied XAA profile requests `urn:opc:idm:__myscopes__` for IDCS APIs. **Ac
 
 The local API on port 4142 is optional: run `python -m app.resource` and set `RESOURCE_URL=http://localhost:4142/api/message` only to use that demo, with its separately authorized custom scope/audience.
 
-See [OIDC and XAA setup](docs/oidc-setup.md) and [IDCS resource/client/trust setup](docs/setup.md). The IDCS issuer, token endpoint and JWKS URL are prefilled from public discovery. JWT bearer support alone does not prove native ID-JAG enablement.
+See [OIDC and XAA setup](docs/oidc-setup.md) and [IDCS resource/client/trust setup](docs/setup.md). Copy the IDCS issuer, token endpoint and JWKS URL from your own domain discovery. JWT bearer support alone does not prove native ID-JAG enablement.
 
-`python -m app.cli check` checks local settings and public discovery. `python -m app.cli trust-template` prints reviewable inbound trust JSON without modifying IDCS. The dashboard’s **Inbound ID-JAG Trust** section creates an IDCS trust only when you click **Create or check inbound trust**. It uses IDCS client credentials, shows the actual response, and checks for an existing issuer trust first. See [trust setup](docs/setup.md#3-configure-the-inbound-identity-propagation-trust-in-idcs).
+`python -m app.cli check` checks local settings and public discovery. `python -m app.cli trust-template` prints reviewable inbound trust JSON without modifying IDCS. The dashboard’s **Inbound ID-JAG Trust** section creates an IDCS trust only when you click **Create or check inbound trust**. It uses the optional dedicated IDCS admin credentials or falls back to the target client credentials, shows the actual response, and checks for an existing issuer trust first. See [trust setup](docs/setup.md#3-configure-the-inbound-identity-propagation-trust-in-idcs).
 
 ## Validate
 

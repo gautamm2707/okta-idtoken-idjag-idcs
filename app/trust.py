@@ -74,7 +74,7 @@ class TrustSetup:
     @staticmethod
     def _failure(status):
         if status in (401, 403):
-            raise FlowError(f"IDCS returned HTTP {status}. Check IDCS_CLIENT_ID/IDCS_CLIENT_SECRET, enable Client Credentials, and grant the client permission to manage Identity Propagation Trusts.")
+            raise FlowError(f"IDCS returned HTTP {status}. Check IDCS_ADMIN_CLIENT_ID/IDCS_ADMIN_CLIENT_SECRET (or the IDCS runtime client credentials when no admin client is set), enable Client Credentials, and grant permission to manage Identity Propagation Trusts.")
         raise FlowError(f"IDCS returned HTTP {status}. Inspect the response below; trust creation was not confirmed.")
 
     def _existing(self, payload, token, traces, secrets):
@@ -105,9 +105,15 @@ class TrustSetup:
     def ensure(self, traces):
         # Serialize local clicks; re-query after a remote duplicate conflict too.
         with self.lock:
-            self.cfg.require("idcs")
             payload = trust_payload(self.cfg)
-            client, secret = self.cfg.get("IDCS_CLIENT_ID"), self.cfg.get("IDCS_CLIENT_SECRET")
+            admin_id, admin_secret = self.cfg.get("IDCS_ADMIN_CLIENT_ID"), self.cfg.get("IDCS_ADMIN_CLIENT_SECRET")
+            if bool(admin_id) != bool(admin_secret):
+                raise FlowError("Configure both IDCS_ADMIN_CLIENT_ID and IDCS_ADMIN_CLIENT_SECRET, or leave both blank to use IDCS_CLIENT_ID/IDCS_CLIENT_SECRET")
+            if admin_id:
+                client, secret = admin_id, admin_secret
+            else:
+                self.cfg.require("idcs")
+                client, secret = self.cfg.get("IDCS_CLIENT_ID"), self.cfg.get("IDCS_CLIENT_SECRET")
             hidden = [secret, base64.b64encode((client + ":" + secret).encode()).decode()]
             status, body = self._request("POST", self.cfg.token_endpoint, traces, hidden,
                 data={"grant_type": "client_credentials", "scope": self.cfg.get("IDCS_ADMIN_SCOPE") or "urn:opc:idm:__myscopes__"},

@@ -171,3 +171,26 @@ def test_missing_credentials_and_token_failure(material):
         with pytest.raises(FlowError):
             service.ensure([])
     assert len(http.calls) == 2
+
+
+def test_separate_admin_client_creates_trust_for_runtime_client(material):
+    body = created(material)
+    material.cfg.env.update(IDCS_ADMIN_CLIENT_ID="admin-client", IDCS_ADMIN_CLIENT_SECRET="admin-secret")
+    service, http = setup(material, listing(), Reply(body, 201))
+    traces = []
+    result = service.ensure(traces)
+    assert result["ready"] and result["status"] == 201
+    assert http.calls[0][2]["auth"].username == "admin-client"
+    assert http.calls[0][2]["auth"].password == "admin-secret"
+    assert http.calls[2][2]["json"]["oauthClients"] == ["target-client"]
+    assert "admin-secret" not in json.dumps(traces)
+    assert "admin-secret" not in json.dumps(result)
+    assert "target-secret" not in json.dumps(result)
+
+
+def test_partial_admin_credentials_rejected_before_network(material):
+    material.cfg.env["IDCS_ADMIN_CLIENT_ID"] = "admin-client"
+    service, http = setup(material)
+    with pytest.raises(FlowError, match="both IDCS_ADMIN_CLIENT_ID"):
+        service.ensure([])
+    assert not http.calls

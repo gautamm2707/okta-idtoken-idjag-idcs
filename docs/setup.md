@@ -2,7 +2,7 @@
 
 **The dashboard now uses OIDC by default.** Start with [OIDC setup](oidc-setup.md). Steps 2–3 below cover the IDCS resource, exchange client and inbound trust for either protocol. Steps 4–5 describe the original SAML-specific requesting app; use the OIDC guide for the new login and XAA client.
 
-This guide uses your Okta organization and IDCS domain. No admin credentials are required by the runtime except the narrowly scoped IDCS exchange client. Tenant configuration requires administrator access separately.
+This page retains the original tenant and legacy SAML examples. New OIDC users should follow the [tenant-neutral end-to-end guide](end-to-end-setup.md).
 
 ## 1. Initialize the local project
 
@@ -26,7 +26,7 @@ The [Oracle inbound trust documentation](https://docs.oracle.com/en-us/iaas/Cont
 
 In the dashboard, open **Inbound ID-JAG Trust** and click **Create or check inbound trust**. This setup operation is available before Okta sign-in and is protected by the local session's CSRF token and origin check. The app is bound to loopback; do not expose this administrative demo on a shared network.
 
-1. Obtain an IDCS access token with `IDCS_CLIENT_ID` / `IDCS_CLIENT_SECRET` using HTTP Basic authentication, `grant_type=client_credentials`, and `scope=urn:opc:idm:__myscopes__` (override with `IDCS_ADMIN_SCOPE`). The IDCS confidential app must have Client Credentials enabled and administrative permission to manage Identity Propagation Trusts. A runtime-only client can receive 403 here. See [Oracle API authentication](https://docs.oracle.com/en-us/iaas/Content/Identity/api-getstarted/OATOAuthClientWebApp.htm).
+1. Obtain an IDCS access token with `IDCS_ADMIN_CLIENT_ID` / `IDCS_ADMIN_CLIENT_SECRET` when configured, otherwise `IDCS_CLIENT_ID` / `IDCS_CLIENT_SECRET` using HTTP Basic authentication, `grant_type=client_credentials`, and `scope=urn:opc:idm:__myscopes__` (override with `IDCS_ADMIN_SCOPE`). The IDCS confidential app must have Client Credentials enabled and administrative permission to manage Identity Propagation Trusts. A runtime-only client can receive 403 here. See [Oracle API authentication](https://docs.oracle.com/en-us/iaas/Content/Identity/api-getstarted/OATOAuthClientWebApp.htm).
 2. Use the token as Bearer authentication to query `/admin/v1/IdentityPropagationTrusts` for the exact Okta issuer, including pagination.
 3. If absent, POST the derived JSON. Display **201 Created** and the actual IDCS response, including generated ID and metadata. The app never invents these values.
 4. If present, show **Trust already created**, the existing response and any configuration differences. An inactive/mismatched trust or multiple trusts for the issuer need review; they are never silently overwritten. A 409 is rechecked before it is reported as an existing trust. Other errors keep their actual HTTP status and diagnostics.

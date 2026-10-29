@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
-IDCS = "https://idcs-ff3532e3a9ba4bd7887f5cf49e2ae425.identity.oraclecloud.com"
+IDCS = "https://your-idcs-domain.identity.oraclecloud.com"
 
 def require_url(value, name, local=False):
     u = urlsplit(value)
@@ -37,7 +37,7 @@ class Settings:
 
     @property
     def okta(self):
-        return self.get("OKTA_ORG_URL", "https://integrator-1242259.okta.com").rstrip("/")
+        return self.get("OKTA_ORG_URL", "https://your-okta-org.okta.com").rstrip("/")
 
     @property
     def okta_token(self):
