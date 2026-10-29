@@ -1,0 +1,71 @@
+{% macro inspector(prefix, req, res, token=none) -%}
+<div class="inspector" data-inspector>
+  <div class="tabs" role="tablist" aria-label="Exchange details">
+    {% for name in ['Request', 'Response', 'Token'] %}
+    <button type="button" role="tab" id="{{ prefix }}-{{ name|lower }}-tab" aria-controls="{{ prefix }}-{{ name|lower }}" aria-selected="{{ 'true' if loop.first else 'false' }}" tabindex="{{ '0' if loop.first else '-1' }}" {% if name == 'Token' and not token %}disabled{% endif %}>{{ name }}</button>
+    {% endfor %}
+  </div>
+  {% for name, value in [('request', req), ('response', res), ('token', token)] %}
+  <div class="tab-panel" role="tabpanel" id="{{ prefix }}-{{ name }}" aria-labelledby="{{ prefix }}-{{ name }}-tab" {% if not loop.first %}hidden{% endif %}>
+    <div class="panel-label">{{ 'VERIFIED TOKEN · HEADER & PAYLOAD' if name == 'token' else name|upper }}<button type="button" class="copy" data-copy>Copy</button></div>
+    <pre>{{ value|tojson(indent=2) }}</pre>
+  </div>
+  {% endfor %}
+</div>
+{%- endmacro %}
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Okta → IDCS · XAA Flow</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"><script defer src="{{ url_for('static', filename='app.js') }}"></script></head>
+<body><div class="topbar"><span>IDENTITY LAB</span><span>Okta → Oracle IDCS</span></div><main>
+<header><div class="eyebrow">CROSS APP ACCESS</div><h1>Follow the identity.</h1><p>Sign in once. Inspect each request, token and response as your identity crosses trust domains.</p><span class="badge">OIDC · Authorization Code + PKCE</span></header>
+{% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+{% if flow and flow.error %}<div class="error" role="alert">{{ flow.error }}</div>{% endif %}
+<details class="config"><summary>Connection settings</summary><div class="grid">
+{% for stage, items in missing.items() %}<div><strong>{{ {'oidc': 'OKTA SIGN-IN', 'id_jag': 'ID-JAG TARGET', 'idcs': 'IDCS REDEMPTION'}[stage] }}</strong><p>{% if items %}Configure: {{ items|join(', ') }}{% else %}<span class="success">Local settings present</span>{% endif %}</p></div>{% endfor %}
+</div><p class="muted">Callback: <code>{{ cfg.get('OKTA_OIDC_REDIRECT_URI', cfg.base + '/oidc/callback') }}</code>. Settings checks do not verify tenant permissions.</p></details>
+<div class="scenario"><div class="eyebrow">THE SCENARIO</div><p>You are the user. Your requesting app signs you in with Okta, obtains an ID-JAG for IDCS, redeems it for a scoped access token, and calls the protected API.</p></div>
+{% if flow %}<div class="session"><span class="status-dot">✓</span><span>Session active</span><strong>{{ flow.identity.name_id }}</strong><a href="/oidc/login">Change</a></div>{% endif %}
+<section id="inbound-trust" class="step {{ 'complete' if trust_state and trust_state.result and trust_state.result.ready else '' }}">
+<div class="step-heading"><span class="step-number">⚙</span><h2>Inbound ID-JAG Trust</h2><span class="token-badge">IDCS setup</span></div>
+<p class="participants">Local app <span>→</span> IDCS administration API</p>
+<p>Create the trust that allows IDCS to accept ID-JAGs from Okta. The app obtains an admin access token using IDCS client credentials, checks for an existing issuer trust, and creates one if absent.</p>
+<p class="muted">Uses IDCS_CLIENT_ID and IDCS_CLIENT_SECRET. The IDCS application needs Client Credentials enabled and permission to manage Identity Propagation Trusts. Source client: <code>{{ cfg.trust_source_client or 'not configured' }}</code>.</p>
+{% if trust_preview %}<details><summary>Trust request derived from .env</summary><pre>{{ trust_preview|tojson(indent=2) }}</pre></details>{% endif %}
+<form method="post" action="/setup/trust"><input type="hidden" name="csrf" value="{{ csrf }}"><button {% if missing.idcs %}disabled{% endif %}>Create or check inbound trust</button></form>
+{% if missing.idcs %}<p class="muted">Configure {{ missing.idcs|join(', ') }} in .env, then restart the app.</p>{% endif %}
+{% if trust_state %}
+{% if trust_state.error %}<p class="error" role="alert">{{ trust_state.error }}</p>{% endif %}
+{% if trust_state.result %}
+<p class="{{ 'success' if trust_state.result.ready else 'error' }}" role="status">{{ trust_state.result.message }}{% if not trust_state.result.ready %} — review required: {{ trust_state.result.differences|join(', ') }}. Existing trusts are not changed automatically.{% endif %}</p>
+{{ inspector('trust-result', trust_state.traces[-1].request, {'status': trust_state.result.status, 'message': trust_state.result.message, 'body': trust_state.result.body}) }}
+{% endif %}
+{% for trace in trust_state.traces %}<details><summary>{{ loop.index }}. {{ 'Obtain admin access token' if loop.first else 'Check existing trusts' if trace.request.method == 'GET' else 'Create trust' }} · HTTP {{ trace.status|default('unavailable') }}</summary>{{ inspector('trust-' ~ loop.index, trace.request, {'status': trace.status|default(none), 'body': trace.response|default({}), 'error': trace.error|default(none)}) }}</details>{% endfor %}
+{% endif %}
+</section>
+<div class="steps">
+<section class="step {{ 'complete' if flow else 'active' }}"><div class="step-heading"><span class="step-number">{{ '✓' if flow else '1' }}</span><h2>User Authentication (SSO)</h2><span class="token-badge">ID Token</span></div>
+<p class="participants">User <span>→</span> Okta IdP</p>
+{% if flow and flow.auth_trace %}
+{{ inspector('sso', {'authorization_request': flow.auth_trace.authorization, 'token_request': flow.auth_trace.token_request}, flow.auth_trace.response, flow.auth_trace.decoded) }}
+<p class="success">ID token signature, issuer, audience, nonce and expiration verified.</p>
+{% elif flow %}<p class="success">Legacy SAML session: {{ flow.identity.name_id }}</p><details><summary>SAML attributes</summary><pre>{{ flow.identity.attributes|tojson(indent=2) }}</pre></details><a class="button" href="/oidc/login">Switch to OIDC sign-in</a>
+{% else %}<p>Authenticate through your Okta OIDC Web Application. After sign-in, inspect the authorization request, token response and decoded ID token.</p><a class="button" href="/oidc/login">Sign in with Okta</a>{% endif %}
+</section>
+<section class="step {{ 'complete' if flow and flow.decoded else 'active' if flow else '' }}"><div class="step-heading"><span class="step-number">{{ '✓' if flow and flow.decoded else '2' }}</span><h2>Token Exchange</h2><span class="token-badge">ID-JAG</span></div><p class="participants">Requesting app <span>→</span> Okta IdP</p>
+<p>Exchange the OIDC {{ cfg.get('OKTA_XAA_SUBJECT_TOKEN_TYPE', 'id_token')|replace('_', ' ') }} for an ID-JAG addressed to IDCS. No IDCS client secret is needed for this step.</p>
+<p class="muted">Audience: <code>{{ cfg.xaa_audience }}</code><br>Resource: <code>{{ cfg.get('OKTA_XAA_RESOURCE') or '(omitted)' }}</code><br>Requested scope: <code>{{ cfg.scope }}</code></p>
+<form method="post" action="/flow/id-jag"><input type="hidden" name="csrf" value="{{ csrf }}"><button {% if not flow %}disabled{% endif %}>Get ID-JAG</button></form>
+{% if flow %}{% for trace in flow.traces %}{% if trace.step.startswith('2.') %}{{ inspector('jag-' ~ loop.index, {'url': trace.url, 'body': trace.request, 'authentication': trace.authentication|default('')}, {'status': trace.status|default(none), 'body': trace.response|default({}), 'error': trace.error|default(none)}, flow.decoded) }}{% endif %}{% endfor %}{% endif %}
+</section>
+<section class="step {{ 'complete' if flow and flow.access else '' }}"><div class="step-heading"><span class="step-number">{{ '✓' if flow and flow.access else '3' }}</span><h2>Redeem at IDCS</h2><span class="token-badge">Access Token</span></div><p class="participants">Requesting app <span>→</span> IDCS</p><p>IDCS validates the ID-JAG through its inbound trust, maps the user and issues a scoped access token using the RFC 7523 JWT bearer grant.</p>
+<form method="post" action="/flow/redeem"><input type="hidden" name="csrf" value="{{ csrf }}"><button {% if not flow or not flow.id_jag %}disabled{% endif %}>Exchange at IDCS</button></form>
+{% if flow and flow.access %}<p class="success">IDCS access token received · kept on the server</p><p class="muted">Granted scope: {{ flow.access.scope }}</p>{% endif %}
+{% if flow %}{% for trace in flow.traces %}{% if trace.step.startswith('3.') %}{{ inspector('idcs-' ~ loop.index, {'url': trace.url, 'body': trace.request, 'authentication': trace.authentication|default('')}, {'status': trace.status|default(none), 'body': trace.response|default({}), 'error': trace.error|default(none)}) }}{% endif %}{% endfor %}{% endif %}
+</section>
+<section class="step {{ 'complete' if flow and flow.resource else '' }}"><div class="step-heading"><span class="step-number">{{ '✓' if flow and flow.resource else '4' }}</span><h2>Access Protected Resource</h2><span class="token-badge">API Response</span></div><p class="participants">Requesting app <span>→</span> {{ 'IDCS Users API' if cfg.resource_is_users else 'Protected API' }}</p><p>Send the access token obtained from ID-JAG redemption as a Bearer token.{% if cfg.resource_is_users %} Retrieve all user pages from IDCS and display the combined result.{% endif %}</p><p class="muted">GET <code>{{ cfg.resource_url }}</code></p>
+<form method="post" action="/flow/resource"><input type="hidden" name="csrf" value="{{ csrf }}"><button {% if not flow or not flow.access %}disabled{% endif %}>Access Protected Resource</button></form>
+{% if flow and flow.resource %}{% if cfg.resource_is_users %}<p class="success">Retrieved {{ flow.resource.totalResults }} users from IDCS.</p>{% endif %}<pre>{{ flow.resource|tojson(indent=2) }}</pre>{% endif %}
+{% if flow %}{% for trace in flow.traces %}{% if trace.step.startswith('4.') %}{{ inspector('resource-' ~ loop.index, {'url': trace.url, 'request': trace.request}, {'status': trace.status|default(none), 'body': trace.response|default({}), 'error': trace.error|default(none)}) }}{% endif %}{% endfor %}{% endif %}</section>
+</div>
+{% if flow and flow.traces %}<details class="config"><summary>Full exchange trace</summary><pre>{{ flow.traces|tojson(indent=2) }}</pre></details>{% endif %}
+<footer><p>Okta: <code>{{ cfg.okta }}</code><br>IDCS issuer: <code>{{ cfg.issuer }}</code></p><p>The SSO Response tab displays your ID token. Client secrets, authorization codes, refresh tokens and access tokens are redacted.</p>{% if flow %}<form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="secondary">Clear local session</button></form>{% endif %}<p>Local demo · one server process · sessions expire after one hour. Clearing this session does not sign you out of Okta.</p></footer>
+</main></body></html>
