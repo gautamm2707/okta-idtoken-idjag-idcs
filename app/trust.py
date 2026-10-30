@@ -1,4 +1,4 @@
-"""Create-or-inspect inbound ID-JAG trusts using server-side IDCS credentials."""
+"""Create-or-inspect inbound ID-JAG trusts using server-side OCI Identity Domains credentials."""
 import base64
 import json
 from threading import RLock
@@ -63,9 +63,9 @@ class TrustSetup:
         try:
             body = response.json()
         except ValueError:
-            body = {"message": "IDCS returned a non-JSON response"}
+            body = {"message": "OCI Identity Domains returned a non-JSON response"}
         if not isinstance(body, dict):
-            body = {"message": "IDCS returned an unexpected JSON response"}
+            body = {"message": "OCI Identity Domains returned an unexpected JSON response"}
         # Even token endpoint diagnostics that echo a newly issued token are scrubbed.
         hidden = secrets + [body.get(k) for k in ("access_token", "refresh_token", "id_token") if isinstance(body.get(k), str)]
         trace["response"] = redact(body, hidden)
@@ -74,8 +74,8 @@ class TrustSetup:
     @staticmethod
     def _failure(status):
         if status in (401, 403):
-            raise FlowError(f"IDCS returned HTTP {status}. Check IDCS_ADMIN_CLIENT_ID/IDCS_ADMIN_CLIENT_SECRET (or the IDCS runtime client credentials when no admin client is set), enable Client Credentials, and grant permission to manage Identity Propagation Trusts.")
-        raise FlowError(f"IDCS returned HTTP {status}. Inspect the response below; trust creation was not confirmed.")
+            raise FlowError(f"OCI Identity Domains returned HTTP {status}. Check IDCS_ADMIN_CLIENT_ID/IDCS_ADMIN_CLIENT_SECRET (or the OCI Identity Domains runtime client credentials when no admin client is set), enable Client Credentials, and grant permission to manage Identity Propagation Trusts.")
+        raise FlowError(f"OCI Identity Domains returned HTTP {status}. Inspect the response below; trust creation was not confirmed.")
 
     def _existing(self, payload, token, traces, secrets):
         matches, start = [], 1
@@ -87,9 +87,9 @@ class TrustSetup:
                 self._failure(status)
             resources, total = body.get("Resources"), body.get("totalResults")
             if not isinstance(resources, list) or type(total) is not int or total < 0:
-                raise FlowError("IDCS returned an invalid trust listing; no trust was created.")
+                raise FlowError("OCI Identity Domains returned an invalid trust listing; no trust was created.")
             if any(not isinstance(item, dict) for item in resources):
-                raise FlowError("IDCS returned invalid trust entries; no trust was created.")
+                raise FlowError("OCI Identity Domains returned invalid trust entries; no trust was created.")
             matches.extend(item for item in resources if item.get("issuer") == payload["issuer"])
             start += len(resources)
             if start > total:
@@ -122,7 +122,7 @@ class TrustSetup:
                 self._failure(status)
             token = body.get("access_token")
             if not isinstance(token, str) or not token or str(body.get("token_type", "")).lower() != "bearer":
-                raise FlowError("IDCS did not return a Bearer admin access token.")
+                raise FlowError("OCI Identity Domains did not return a Bearer admin access token.")
             hidden.append(token)
             matches = self._existing(payload, token, traces, hidden)
             if matches:

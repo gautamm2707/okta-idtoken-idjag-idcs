@@ -1,4 +1,4 @@
-"""Real Okta RFC 8693 exchanges and IDCS RFC 7523 redemption."""
+"""Real Okta RFC 8693 exchanges and OCI Identity Domains RFC 7523 redemption."""
 import base64
 import re
 import time
@@ -131,27 +131,27 @@ class Exchanges:
         except (jwt.PyJWTError, ValueError) as exc:
             raise FlowError("ID-JAG signature, type, issuer, audience or lifetime validation failed") from exc
         if not isinstance(claims["client_id"], str) or claims["client_id"].casefold() != self.cfg.trust_source_client.casefold():
-            raise FlowError("ID-JAG client_id must match the inbound trust source client (OKTA_OIDC_CLIENT_ID or IDCS_TRUST_SOURCE_CLIENT_ID); check the Okta connection and IDCS trust")
+            raise FlowError("ID-JAG client_id must match the inbound trust source client (OKTA_OIDC_CLIENT_ID or IDCS_TRUST_SOURCE_CLIENT_ID); check the Okta connection and OCI Identity Domains trust")
         scopes = claims.get("scope")
         if not isinstance(scopes, str) or not set(self.cfg.scope.split()).issubset(scopes.split()):
-            raise FlowError("ID-JAG does not contain the requested IDCS scopes")
+            raise FlowError("ID-JAG does not contain the requested OCI Identity Domains scopes")
         if not claims.get(self.cfg.get("IDCS_SUBJECT_CLAIM", "email")):
-            raise FlowError("ID-JAG lacks the claim configured for the IDCS inbound user mapping")
+            raise FlowError("ID-JAG lacks the claim configured for the OCI Identity Domains inbound user mapping")
         return token, {"header": header, "claims": claims, "signature_verified": True}
 
     def redeem(self, id_jag, traces):
         self.cfg.require("idcs")
-        body = self.post_token("3. ID-JAG → IDCS access token", self.cfg.token_endpoint,
+        body = self.post_token("3. ID-JAG → OCI Identity Domains access token", self.cfg.token_endpoint,
             {"grant_type": JWT_BEARER, "assertion": id_jag, "scope": self.cfg.scope}, traces,
             auth=HTTPBasicAuth(self.cfg.get("IDCS_CLIENT_ID"), self.cfg.get("IDCS_CLIENT_SECRET")))
         if not body.get("access_token") or str(body.get("token_type", "")).lower() != "bearer":
-            raise FlowError("IDCS response is missing a Bearer access token")
+            raise FlowError("OCI Identity Domains response is missing a Bearer access token")
         try:
             expires_in = int(body["expires_in"])
             if expires_in <= 0:
                 raise ValueError()
         except (KeyError, ValueError, TypeError):
-            raise FlowError("IDCS response has no valid expires_in") from None
+            raise FlowError("OCI Identity Domains response has no valid expires_in") from None
         return {"value": body["access_token"], "expires_at": time.time() + expires_in,
                 "scope": body.get("scope", self.cfg.scope)}
 
@@ -161,9 +161,9 @@ class Exchanges:
         users, start, expected_total, total_bytes = [], 1, None, 0
         while True:
             if access["expires_at"] <= time.time():
-                raise FlowError("IDCS access token expired; obtain a fresh ID-JAG and redeem it")
+                raise FlowError("OCI Identity Domains access token expired; obtain a fresh ID-JAG and redeem it")
             params = {"startIndex": start, "count": 100} if users_api else None
-            entry = {"step": "4. IDCS users" if users_api else "4. Protected resource", "url": url,
+            entry = {"step": "4. OCI Identity Domains users" if users_api else "4. Protected resource", "url": url,
                      "request": {"method": "GET", "Authorization": "Bearer [redacted]", "query": params}}
             traces.append(entry)
             try:
@@ -190,18 +190,18 @@ class Exchanges:
             if not 200 <= response.status_code < 300:
                 hint = ""
                 if users_api and response.status_code in (401, 403):
-                    hint = ". IDCS rejected the redeemed access token or its permission to list users; inspect the response below and check the IDCS client/user grants."
+                    hint = ". OCI Identity Domains rejected the redeemed access token or its permission to list users; inspect the response below and check the OCI Identity Domains client/user grants."
                 raise FlowError(f"Protected resource returned HTTP {response.status_code}" + hint)
             if not users_api:
                 return entry["response"]
             if not isinstance(body, dict):
-                raise FlowError("IDCS returned an invalid users listing")
+                raise FlowError("OCI Identity Domains returned an invalid users listing")
             total = body.get("totalResults")
             page = body.get("Resources", [] if total == 0 else None)
             if type(total) is not int or total < 0 or not isinstance(page, list) or any(not isinstance(u, dict) for u in page):
-                raise FlowError("IDCS returned an invalid users listing")
+                raise FlowError("OCI Identity Domains returned an invalid users listing")
             if body.get("startIndex", start) != start:
-                raise FlowError("IDCS returned an unexpected page; complete users listing was not loaded")
+                raise FlowError("OCI Identity Domains returned an unexpected page; complete users listing was not loaded")
             if expected_total is not None and total != expected_total:
                 raise FlowError("The users list changed during pagination; retry to load a consistent listing")
             expected_total = total
@@ -213,5 +213,5 @@ class Exchanges:
                                "totalResults": total, "startIndex": 1, "itemsPerPage": len(users), "Resources": users},
                               [access["value"], self.cfg.get("IDCS_CLIENT_SECRET")])
             if not page or len(users) > total:
-                raise FlowError("IDCS pagination ended unexpectedly; complete users listing was not loaded")
+                raise FlowError("OCI Identity Domains pagination ended unexpectedly; complete users listing was not loaded")
             start += len(page)

@@ -237,7 +237,7 @@ def test_full_oidc_to_idcs_resource_flow(material):
         flow = flow_for(app, client)
         assert response.status_code == 200
         assert flow["error"] is None, flow["error"]
-    assert b"Your IDCS access token was verified" in response.data
+    assert b"Your OCI Identity Domains access token was verified" in response.data
     assert len(http.calls) == 3
     assert b"target-secret" not in response.data
     assert b"oidc-client-secret" not in response.data

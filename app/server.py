@@ -198,7 +198,7 @@ def create_app(cfg=None, exchanges=None, oidc=None, trust_setup=None):
     def resource(flow):
         flow["resource"] = None
         if not flow["access"]:
-            raise FlowError("Redeem an ID-JAG at IDCS first")
+            raise FlowError("Redeem an ID-JAG at OCI Identity Domains first")
         flow["resource"] = exchange.call_resource(flow["access"], flow["traces"])
 
     @app.post("/logout")

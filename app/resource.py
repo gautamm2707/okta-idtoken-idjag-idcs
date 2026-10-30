@@ -1,4 +1,4 @@
-"""Protected local API: verifies IDCS JWT signatures, issuer, audience and scope."""
+"""Protected local API: verifies OCI Identity Domains JWT signatures, issuer, audience and scope."""
 import jwt
 from flask import Flask, jsonify, request
 from .config import Settings
@@ -29,9 +29,9 @@ def create_app(cfg=None, keys=None):
             claims = jwt.decode(token, keys.get_signing_key_from_jwt(token).key, algorithms=["RS256"],
                                 issuer=cfg.issuer, audience=cfg.get("RESOURCE_AUDIENCE", "http://localhost:4142"),
                                 options={"require": ["iss", "aud", "sub", "exp", "iat"]}, leeway=30)
-            # A signature from IDCS alone does not make a JWT an API access token.
+            # A signature from OCI Identity Domains alone does not make a JWT an API access token.
             if claims.get("tok_type") != "AT":
-                raise jwt.InvalidTokenError("Expected an IDCS access token")
+                raise jwt.InvalidTokenError("Expected an OCI Identity Domains access token")
         except (jwt.PyJWTError, ValueError):
             return jsonify(error="invalid_token"), 401, {"WWW-Authenticate": 'Bearer error="invalid_token"'}
         scopes = claims.get("scope", "")
@@ -39,7 +39,7 @@ def create_app(cfg=None, keys=None):
             scopes = scopes.split()
         if not isinstance(scopes, list) or cfg.get("RESOURCE_REQUIRED_SCOPE", "http://localhost:4142/demo:read") not in scopes:
             return jsonify(error="insufficient_scope"), 403, {"WWW-Authenticate": 'Bearer error="insufficient_scope"'}
-        return {"message": "Hello from the protected resource. Your IDCS access token was verified.",
+        return {"message": "Hello from the protected resource. Your OCI Identity Domains access token was verified.",
                 "subject": claims["sub"], "issuer": claims["iss"], "scope": scopes}
 
     return app

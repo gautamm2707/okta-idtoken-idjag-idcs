@@ -126,7 +126,7 @@ def test_full_browser_flow_and_redaction(material):
         with browser.session_transaction() as session:
             flow = app.extensions["flows"].get(session["flow"])
             assert flow["error"] is None, flow["error"]
-    assert b"Your IDCS access token was verified" in response.data
+    assert b"Your OCI Identity Domains access token was verified" in response.data
     text = response.get_data(as_text=True)
     assert "opaque-refresh" not in text and "target-secret" not in text
     assert http.access() not in text and http.jag() not in text

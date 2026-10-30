@@ -44,7 +44,7 @@ def test_users_pagination_and_ui(material):
     assert [u["id"] for u in state["resource"]["Resources"]] == ["one", "two", "three"]
     assert all(url == material.cfg.issuer.rstrip("/") + "/admin/v1/Users" for url, _ in http.calls)
     assert [kw["params"]["startIndex"] for _, kw in http.calls] == [1, 3]
-    assert b"Retrieved 3 users from IDCS" in response.data
+    assert b"Retrieved 3 users from OCI Identity Domains" in response.data
     assert b"resource-1-response" in response.data
     assert b"redeemed-access-token" not in response.data
 
