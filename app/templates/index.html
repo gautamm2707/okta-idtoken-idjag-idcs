@@ -15,13 +15,31 @@
 {%- endmacro %}
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Okta → IDCS · XAA Flow</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"><script defer src="{{ url_for('static', filename='app.js') }}"></script></head>
-<body><div class="topbar"><span>IDENTITY LAB</span><span>Okta → Oracle IDCS</span></div><main>
+<body><div class="topbar"><span>ID-JAG PLAYGROUND</span><span>Okta → Oracle IDCS</span></div><main>
 <header><div class="eyebrow">CROSS APP ACCESS</div><h1>Follow the identity.</h1><p>Sign in once. Inspect each request, token and response as your identity crosses trust domains.</p><span class="badge">OIDC · Authorization Code + PKCE</span></header>
 {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
 {% if flow and flow.error %}<div class="error" role="alert">{{ flow.error }}</div>{% endif %}
-<details class="config"><summary>Connection settings</summary><div class="grid">
+<details class="config connection-settings" open><summary>Connection settings</summary>
+<div class="connection-board" aria-label="Configured services and resource app">
+  <div class="connection-row">
+    <span class="connection-label">Services</span>
+    <div class="connection-services">
+      {% for label, url in [('IDP', cfg.okta), ('Auth Server', cfg.okta + '/oauth2/v1'), ('Resource Server', cfg.issuer)] %}
+      <button type="button" class="endpoint-chip" aria-label="{{ label }}: {{ url }}">
+        <span class="endpoint-dot" aria-hidden="true"></span><span>{{ label }}</span><span class="endpoint-tip" role="tooltip">{{ url }}</span>
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="connection-row">
+    <span class="connection-label">Resource app</span>
+    <div class="resource-endpoint"><span class="endpoint-dot" aria-hidden="true"></span><span class="resource-kind">{{ 'IDCS Users API' if cfg.resource_is_users else 'Protected API' }}</span><code>{{ cfg.resource_url }}</code></div>
+  </div>
+</div>
+<p class="connection-hint">Hover over or focus a service to see its URL. These are configured endpoints; availability is not checked here.</p>
+<details class="config-details"><summary>Configuration checks</summary><div class="grid">
 {% for stage, items in missing.items() %}<div><strong>{{ {'oidc': 'OKTA SIGN-IN', 'id_jag': 'ID-JAG TARGET', 'idcs': 'IDCS REDEMPTION'}[stage] }}</strong><p>{% if items %}Configure: {{ items|join(', ') }}{% else %}<span class="success">Local settings present</span>{% endif %}</p></div>{% endfor %}
-</div><p class="muted">Callback: <code>{{ cfg.get('OKTA_OIDC_REDIRECT_URI', cfg.base + '/oidc/callback') }}</code>. Settings checks do not verify tenant permissions.</p></details>
+</div><p class="muted">Callback: <code>{{ cfg.get('OKTA_OIDC_REDIRECT_URI', cfg.base + '/oidc/callback') }}</code>. Settings checks do not verify tenant permissions.</p></details></details>
 <div class="scenario"><div class="eyebrow">THE SCENARIO</div><p>You are the user. Your requesting app signs you in with Okta, obtains an ID-JAG for IDCS, redeems it for a scoped access token, and calls the protected API.</p></div>
 {% if flow %}<div class="session"><span class="status-dot">✓</span><span>Session active</span><strong>{{ flow.identity.name_id }}</strong><a href="/oidc/login">Change</a></div>{% endif %}
 <section id="inbound-trust" class="step {{ 'complete' if trust_state and trust_state.result and trust_state.result.ready else '' }}">
